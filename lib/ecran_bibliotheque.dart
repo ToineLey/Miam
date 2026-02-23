@@ -1,33 +1,6 @@
 import 'package:flutter/material.dart';
+import 'donnees_globales.dart'; // Import du fichier de sauvegarde
 
-// --- 1. LES VARIABLES GLOBALES DE L'APPLICATION ---
-
-// La liste de tes recettes
-List<Map<String, dynamic>> mesRecettesGlobales = [
-  {"nom": "Poulet rôti & Légumes", "rapide": false, "tempsExact": 45, "categorie": "Plat principal", "couleur": Colors.orange.value, "legumes": 50.0, "proteines": 50.0, "feculents": 0.0, "ingredients": ["Poulet", "Carottes", "Oignons"]},
-  {"nom": "Pâtes au Pesto", "rapide": true, "tempsExact": 15, "categorie": "Plat principal", "couleur": Colors.green.value, "legumes": 10.0, "proteines": 10.0, "feculents": 80.0, "ingredients": ["Pâtes", "Pesto", "Parmesan"]},
-  {"nom": "Pancakes Protéinés", "rapide": true, "tempsExact": 10, "categorie": "Petit-déjeuner", "couleur": Colors.brown.value, "legumes": 0.0, "proteines": 60.0, "feculents": 40.0, "ingredients": ["Oeufs", "Flocons d'avoine", "Lait"]},
-];
-
-// Les catégories (rayons) disponibles
-final List<String> rayonsSupermarche = [
-  "🥦 Fruits & Légumes", "🥩 Viandes & Poissons", "🧀 Frais & Laitier",
-  "🍝 Épicerie Salée", "🍯 Épicerie Sucrée", "🥖 Boulangerie",
-  "🌱 Rayon Végétarien", "📦 Autres"
-];
-
-// Le dictionnaire qui associe chaque ingrédient à son rayon
-Map<String, String> dictionnaireIngredientsGlobal = {
-  "Poulet": "🥩 Viandes & Poissons", "Boeuf": "🥩 Viandes & Poissons", "Saumon": "🥩 Viandes & Poissons",
-  "Oeufs": "🧀 Frais & Laitier", "Lait": "🧀 Frais & Laitier", "Beurre": "🧀 Frais & Laitier", "Parmesan": "🧀 Frais & Laitier",
-  "Carottes": "🥦 Fruits & Légumes", "Oignons": "🥦 Fruits & Légumes", "Tomates": "🥦 Fruits & Légumes", "Salade": "🥦 Fruits & Légumes",
-  "Pâtes": "🍝 Épicerie Salée", "Riz": "🍝 Épicerie Salée", "Huile d'olive": "🍝 Épicerie Salée", "Pesto": "🍝 Épicerie Salée",
-  "Farine": "🍯 Épicerie Sucrée", "Flocons d'avoine": "🍯 Épicerie Sucrée",
-  "Croûtons": "🥖 Boulangerie",
-};
-
-
-// --- 2. L'ÉCRAN DE LA BIBLIOTHÈQUE ---
 class EcranBibliotheque extends StatefulWidget {
   const EcranBibliotheque({super.key});
   @override
@@ -119,25 +92,28 @@ class _EcranBibliothequeState extends State<EcranBibliotheque> {
   }
 
   void _afficherFormulaireCreation(BuildContext context, {Map<String, dynamic>? platAEditer}) async {
-    final nouvelleRecette = await showModalBottomSheet<Map<String, dynamic>>(
+    final resultat = await showModalBottomSheet(
       context: context, isScrollControlled: true, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) { return FormulaireCreationPlat(platAEditer: platAEditer); },
     );
 
-    if (nouvelleRecette != null) {
+    if (resultat == "SUPPRIMER" && platAEditer != null) {
+      setState(() { mesRecettesGlobales.remove(platAEditer); });
+      sauvegarderDonneesLocales(); // <-- SAUVEGARDE
+    } else if (resultat != null && resultat is Map<String, dynamic>) {
       setState(() {
         if (platAEditer != null) {
           int index = mesRecettesGlobales.indexOf(platAEditer);
-          if (index != -1) mesRecettesGlobales[index] = nouvelleRecette;
+          if (index != -1) mesRecettesGlobales[index] = resultat;
         } else {
-          mesRecettesGlobales.add(nouvelleRecette);
+          mesRecettesGlobales.add(resultat);
         }
       });
+      sauvegarderDonneesLocales(); // <-- SAUVEGARDE
     }
   }
 }
 
-// --- 3. LE FORMULAIRE DE CRÉATION DE PLAT ---
 class FormulaireCreationPlat extends StatefulWidget {
   final Map<String, dynamic>? platAEditer;
   const FormulaireCreationPlat({super.key, this.platAEditer});
@@ -189,28 +165,19 @@ class _FormulaireCreationPlatState extends State<FormulaireCreationPlat> {
     });
   }
 
-  // LA MÉTHODE INTELLIGENTE D'AJOUT D'INGRÉDIENT
   void _ajouterIngredient(String valeur) {
     String ing = valeur.trim();
     if (ing.isEmpty || ingredientsSelectionnes.contains(ing)) return;
 
     if (dictionnaireIngredientsGlobal.containsKey(ing)) {
-      // S'il existe déjà dans le dictionnaire global, on l'ajoute directement
-      setState(() {
-        ingredientsSelectionnes.add(ing);
-        _ingredientController.clear();
-        _mettreAJourSuggestions("");
-      });
+      setState(() { ingredientsSelectionnes.add(ing); _ingredientController.clear(); _mettreAJourSuggestions(""); });
     } else {
-      // S'il est inconnu, on ouvre la popup pour demander sa catégorie
       _demanderCategoriePourNouvelIngredient(ing);
     }
   }
 
-  // LA FENÊTRE POUR CLASSER UN NOUVEL INGRÉDIENT
   Future<void> _demanderCategoriePourNouvelIngredient(String ingredientNom) async {
     String categorieChoisie = rayonsSupermarche.first;
-
     await showDialog(
         context: context,
         builder: (context) {
@@ -224,8 +191,7 @@ class _FormulaireCreationPlatState extends State<FormulaireCreationPlat> {
                 StatefulBuilder(
                     builder: (context, setStateDialog) {
                       return DropdownButton<String>(
-                        isExpanded: true,
-                        value: categorieChoisie,
+                        isExpanded: true, value: categorieChoisie,
                         items: rayonsSupermarche.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
                         onChanged: (val) => setStateDialog(() => categorieChoisie = val!),
                       );
@@ -238,15 +204,9 @@ class _FormulaireCreationPlatState extends State<FormulaireCreationPlat> {
               ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                   onPressed: () {
-                    // On l'enregistre dans le dictionnaire global
                     dictionnaireIngredientsGlobal[ingredientNom] = categorieChoisie;
-
-                    // On l'ajoute à la recette en cours
-                    setState(() {
-                      ingredientsSelectionnes.add(ingredientNom);
-                      _ingredientController.clear();
-                      _mettreAJourSuggestions("");
-                    });
+                    setState(() { ingredientsSelectionnes.add(ingredientNom); _ingredientController.clear(); _mettreAJourSuggestions(""); });
+                    sauvegarderDonneesLocales(); // <-- SAUVEGARDE
                     Navigator.pop(context);
                   },
                   child: const Text("Enregistrer")
@@ -308,26 +268,49 @@ class _FormulaireCreationPlatState extends State<FormulaireCreationPlat> {
               _construireSlider("Féculents", feculents, Colors.orange, (val) => setState(() => feculents = val > (100 - legumes - proteines) ? (100 - legumes - proteines) : val)),
 
               const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity, height: 50,
-                child: ElevatedButton(
-                  onPressed: total == 100 ? () {
-                    Map<String, dynamic> nouvelleRecette = {
-                      "nom": _nomController.text.trim().isEmpty ? "Nouvelle Recette" : _nomController.text.trim(),
-                      "rapide": estRapide,
-                      "tempsExact": estRapide ? 15 : (int.tryParse(_tempsController.text) ?? 30),
-                      "categorie": categorieSelectionnee,
-                      "couleur": couleurSelectionnee.value,
-                      "legumes": legumes,
-                      "proteines": proteines,
-                      "feculents": feculents,
-                      "ingredients": ingredientsSelectionnes,
-                    };
-                    Navigator.pop(context, nouvelleRecette);
-                  } : null,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                  child: Text(estModeEdition ? "Sauvegarder" : "Ajouter à la bibliothèque", style: const TextStyle(fontSize: 16)),
-                ),
+
+              Row(
+                children: [
+                  if (estModeEdition) ...[
+                    Expanded(
+                      flex: 1,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context, "SUPPRIMER"),
+                        style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red,
+                            side: const BorderSide(color: Colors.red),
+                            padding: const EdgeInsets.symmetric(vertical: 14)
+                        ),
+                        child: const Icon(Icons.delete),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
+                  Expanded(
+                    flex: 3,
+                    child: SizedBox(
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: total == 100 ? () {
+                          Map<String, dynamic> nouvelleRecette = {
+                            "nom": _nomController.text.trim().isEmpty ? "Nouvelle Recette" : _nomController.text.trim(),
+                            "rapide": estRapide,
+                            "tempsExact": estRapide ? 15 : (int.tryParse(_tempsController.text) ?? 30),
+                            "categorie": categorieSelectionnee,
+                            "couleur": couleurSelectionnee.value,
+                            "legumes": legumes,
+                            "proteines": proteines,
+                            "feculents": feculents,
+                            "ingredients": ingredientsSelectionnes,
+                          };
+                          Navigator.pop(context, nouvelleRecette);
+                        } : null,
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                        child: Text(estModeEdition ? "Sauvegarder" : "Ajouter à la bibliothèque", style: const TextStyle(fontSize: 16)),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

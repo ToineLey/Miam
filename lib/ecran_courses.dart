@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'ecran_planificateur.dart'; // Pour lire le menu
-import 'ecran_bibliotheque.dart';  // Pour lire le dictionnaire global des rayons
+import 'ecran_planificateur.dart';
+// C'EST ICI LA CORRECTION : On importe le bon fichier !
+import 'donnees_globales.dart';
 
 class EcranCourses extends StatefulWidget {
   const EcranCourses({super.key});
@@ -40,7 +41,6 @@ class _EcranCoursesState extends State<EcranCourses> {
       if (ingredientsCoches.contains(ingredient)) {
         dejaCoches[ingredient] = portions;
       } else {
-        // --- ON UTILISE LE DICTIONNAIRE GLOBAL ICI ---
         String categorie = dictionnaireIngredientsGlobal[ingredient] ?? "📦 Autres";
 
         if (!aAcheterParCategorie.containsKey(categorie)) {

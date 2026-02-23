@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_card_swiper/flutter_card_swiper.dart';
+import 'donnees_globales.dart'; // Import du fichier de sauvegarde
 
 class EcranSwipe extends StatefulWidget {
   const EcranSwipe({super.key});
@@ -9,37 +10,80 @@ class EcranSwipe extends StatefulWidget {
 }
 
 class _EcranSwipeState extends State<EcranSwipe> {
-  // Fausses données pour tester le visuel
-  final List<Map<String, String>> platsTemp = [
-    {"nom": "Poulet rôti & Légumes", "image": "https://images.unsplash.com/photo-1598514982205-f36b96d1e8d4?q=80&w=500&auto=format&fit=crop"},
-    {"nom": "Pâtes au Pesto", "image": "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?q=80&w=500&auto=format&fit=crop"},
-    {"nom": "Salade César", "image": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=500&auto=format&fit=crop"},
-    {"nom": "Burger Maison", "image": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?q=80&w=500&auto=format&fit=crop"},
+  int modeActuel = 0;
+
+  final CardSwiperController _swiperControllerRecettes = CardSwiperController();
+  final CardSwiperController _swiperControllerIngredients = CardSwiperController();
+
+  final List<Map<String, dynamic>> baseDecouverteInternet = [
+    {"nom": "Curry de Pois Chiches", "rapide": true, "tempsExact": 20, "categorie": "Plat principal", "couleur": Colors.orange.value, "legumes": 40.0, "proteines": 30.0, "feculents": 30.0, "ingredients": ["Pois chiches", "Lait de coco", "Curry", "Riz"]},
+    {"nom": "Soupe à l'Oignon", "rapide": false, "tempsExact": 45, "categorie": "Entrée", "couleur": Colors.amber.value, "legumes": 80.0, "proteines": 0.0, "feculents": 20.0, "ingredients": ["Oignons", "Bouillon", "Pain", "Emmental"]},
+    {"nom": "Wok de Crevettes", "rapide": true, "tempsExact": 15, "categorie": "Plat principal", "couleur": Colors.pink.value, "legumes": 50.0, "proteines": 30.0, "feculents": 20.0, "ingredients": ["Crevettes", "Poivrons", "Sauce Soja", "Nouilles"]},
+    {"nom": "Gratin Dauphinois", "rapide": false, "tempsExact": 60, "categorie": "Plat principal", "couleur": Colors.yellow.value, "legumes": 0.0, "proteines": 20.0, "feculents": 80.0, "ingredients": ["Pommes de terre", "Crème", "Lait", "Ail"]},
+    {"nom": "Mousse au Chocolat", "rapide": true, "tempsExact": 15, "categorie": "Dessert", "couleur": Colors.brown.value, "legumes": 0.0, "proteines": 30.0, "feculents": 70.0, "ingredients": ["Chocolat", "Oeufs", "Sucre"]},
   ];
+
+  final List<String> ingredientsANoter = [
+    "Oignons", "Ail", "Coriandre", "Lait de coco", "Crevettes", "Champignons", "Poivrons", "Fromage de chèvre"
+  ];
+
+  List<Map<String, dynamic>> get recettesAffichees {
+    return baseDecouverteInternet.where((plat) {
+      List<String> ingredientsDuPlat = List<String>.from(plat["ingredients"]).map((e) => e.toLowerCase()).toList();
+      for (String banni in ingredientsBannisGlobaux) {
+        if (ingredientsDuPlat.contains(banni.toLowerCase())) return false;
+      }
+      return true;
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey.shade100,
       body: SafeArea(
         child: Column(
           children: [
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Text("Que penses-tu de ces plats ?", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            ),
-            Expanded(
-              child: CardSwiper(
-                cardsCount: platsTemp.length,
-                onSwipe: _onSwipe,
-                cardBuilder: (context, index, percentThresholdX, percentThresholdY) {
-                  final plat = platsTemp[index];
-                  return _construireCarte(plat);
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: SegmentedButton<int>(
+                segments: const [
+                  ButtonSegment(value: 0, label: Text("Découvrir des plats"), icon: Icon(Icons.restaurant)),
+                  ButtonSegment(value: 1, label: Text("Mes goûts"), icon: Icon(Icons.favorite)),
+                ],
+                selected: {modeActuel},
+                onSelectionChanged: (Set<int> newSelection) {
+                  setState(() => modeActuel = newSelection.first);
                 },
+                style: ButtonStyle(backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+                  return states.contains(WidgetState.selected) ? Colors.green.shade100 : Colors.white;
+                })),
               ),
             ),
-            const Padding(
-              padding: EdgeInsets.only(bottom: 20),
-              child: Text("⬅️ Non  |  Oui ➡️", style: TextStyle(fontSize: 18, color: Colors.grey)),
+
+            Expanded(
+              child: modeActuel == 0 ? _construireSwiperRecettes() : _construireSwiperIngredients(),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.only(bottom: 20, top: 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Column(
+                    children: [
+                      const Icon(Icons.close, color: Colors.red, size: 30),
+                      Text(modeActuel == 0 ? "Non merci" : "Je déteste (Bannir)", style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  Column(
+                    children: [
+                      const Icon(Icons.favorite, color: Colors.green, size: 30),
+                      Text(modeActuel == 0 ? "Ajouter au carnet" : "J'aime bien", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -47,43 +91,137 @@ class _EcranSwipeState extends State<EcranSwipe> {
     );
   }
 
-  // La logique quand on glisse la carte
-  bool _onSwipe(int previousIndex, int? currentIndex, CardSwiperDirection direction) {
-    if (direction == CardSwiperDirection.right) {
-      debugPrint("Ajouté aux favoris !");
-    } else if (direction == CardSwiperDirection.left) {
-      debugPrint("Plat ignoré.");
+  Widget _construireSwiperRecettes() {
+    final plats = recettesAffichees;
+
+    if (plats.isEmpty) {
+      return const Center(child: Text("Tu as swipé toutes les recettes\n(ou tes allergies bloquent tout le reste !)", textAlign: TextAlign.center));
     }
-    return true; // true = autoriser le swipe
+
+    return CardSwiper(
+      key: ValueKey('recettes_${plats.length}'),
+      controller: _swiperControllerRecettes,
+      cardsCount: plats.length,
+      isLoop: false,
+      numberOfCardsDisplayed: plats.length > 1 ? 2 : 1,
+      onSwipe: (previousIndex, currentIndex, direction) {
+        if (previousIndex >= plats.length) return false;
+
+        final plat = plats[previousIndex];
+        if (direction == CardSwiperDirection.right) {
+          setState(() {
+            mesRecettesGlobales.add(Map<String, dynamic>.from(plat));
+          });
+          sauvegarderDonneesLocales(); // <-- SAUVEGARDE
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("✅ ${plat['nom']} ajouté à ton carnet !"), backgroundColor: Colors.green, duration: const Duration(seconds: 1)));
+        }
+        return true;
+      },
+      cardBuilder: (context, index, percentThresholdX, percentThresholdY) {
+        if (index >= plats.length) return const SizedBox.shrink();
+        return _construireCarteRecette(plats[index]);
+      },
+    );
   }
 
-  // Le design de la carte
-  Widget _construireCarte(Map<String, String> plat) {
+  Widget _construireCarteRecette(Map<String, dynamic> plat) {
     return Container(
       decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        image: DecorationImage(
-          image: NetworkImage(plat["image"]!),
-          fit: BoxFit.cover,
-        ),
-        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 5))],
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 5))],
+        border: Border.all(color: Color(plat["couleur"]).withOpacity(0.5), width: 2),
       ),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: const LinearGradient(
-            colors: [Colors.black87, Colors.transparent],
-            begin: Alignment.bottomCenter,
-            end: Alignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            flex: 3,
+            child: Container(
+              decoration: BoxDecoration(color: Color(plat["couleur"]), borderRadius: const BorderRadius.vertical(top: Radius.circular(18))),
+              child: Center(child: Icon(Icons.restaurant, size: 80, color: Colors.white.withOpacity(0.8))),
+            ),
           ),
-        ),
-        padding: const EdgeInsets.all(20),
-        alignment: Alignment.bottomLeft,
-        child: Text(
-          plat["nom"]!,
-          style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
-        ),
+          Expanded(
+            flex: 4,
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(plat["nom"], style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Icon(Icons.timer, size: 16, color: Colors.grey.shade600),
+                      const SizedBox(width: 5),
+                      Text("${plat['tempsExact']} min", style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+                      const SizedBox(width: 15),
+                      Icon(Icons.category, size: 16, color: Colors.grey.shade600),
+                      const SizedBox(width: 5),
+                      Text(plat["categorie"], style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const Divider(height: 30),
+                  const Text("Ingrédients :", style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8, runSpacing: 8,
+                    children: (plat["ingredients"] as List).map((ing) {
+                      return Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(10)), child: Text(ing, style: const TextStyle(fontSize: 13)));
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _construireSwiperIngredients() {
+    if (ingredientsANoter.isEmpty) {
+      return const Center(child: Text("Tu as défini tous tes goûts !"));
+    }
+
+    return CardSwiper(
+      key: ValueKey('ingredients_${ingredientsANoter.length}'),
+      controller: _swiperControllerIngredients,
+      cardsCount: ingredientsANoter.length,
+      isLoop: false,
+      numberOfCardsDisplayed: ingredientsANoter.length > 1 ? 2 : 1,
+      onSwipe: (previousIndex, currentIndex, direction) {
+        if (previousIndex >= ingredientsANoter.length) return false;
+
+        final ingredient = ingredientsANoter[previousIndex];
+        if (direction == CardSwiperDirection.left) {
+          setState(() => ingredientsBannisGlobaux.add(ingredient));
+          sauvegarderDonneesLocales(); // <-- SAUVEGARDE
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("🚫 $ingredient banni !"), backgroundColor: Colors.red, duration: const Duration(seconds: 1)));
+        } else if (direction == CardSwiperDirection.right) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("❤️ Tu aimes : $ingredient"), backgroundColor: Colors.green, duration: const Duration(seconds: 1)));
+        }
+        return true;
+      },
+      cardBuilder: (context, index, percentThresholdX, percentThresholdY) {
+        if (index >= ingredientsANoter.length) return const SizedBox.shrink();
+        return Container(
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 5))]),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.restaurant_menu, size: 80, color: Colors.grey),
+                const SizedBox(height: 20),
+                Text(ingredientsANoter[index], style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 20),
+                const Text("Qu'en penses-tu ?", style: TextStyle(color: Colors.grey)),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

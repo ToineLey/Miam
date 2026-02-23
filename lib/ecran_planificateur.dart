@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
 
-import 'ecran_bibliotheque.dart'; // On importe la base globale
+// C'EST ICI LA CORRECTION : On importe le bon fichier !
+import 'donnees_globales.dart';
 
 List<Jour> semaineGlobale = [];
 
