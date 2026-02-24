@@ -1,5 +1,12 @@
 import 'package:flutter/material.dart';
-import 'donnees_globales.dart'; // Import du fichier de sauvegarde
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:convert';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+
+import 'donnees_globales.dart';
 
 class EcranBibliotheque extends StatefulWidget {
   const EcranBibliotheque({super.key});
@@ -37,10 +44,96 @@ class _EcranBibliothequeState extends State<EcranBibliotheque> {
     return liste;
   }
 
+  // =========================================================
+  // --- EXPORT DES RECETTES (PC vs MOBILE) ---
+  // =========================================================
+  Future<void> _exporterRecettes() async {
+    try {
+      await sauvegarderDonneesLocales();
+      String jsonDesRecettes = const JsonEncoder.withIndent('  ').convert(mesRecettesGlobales);
+
+      if (!kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+        String? cheminSauvegarde = await FilePicker.platform.saveFile(
+          dialogTitle: 'Sauvegarder ton carnet de recettes',
+          fileName: 'mes_recettes.json',
+          type: FileType.custom,
+          allowedExtensions: ['json'],
+        );
+
+        if (cheminSauvegarde != null) {
+          File fichier = File(cheminSauvegarde);
+          await fichier.writeAsString(jsonDesRecettes);
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Carnet sauvegardé sur ton PC !"), backgroundColor: Colors.green));
+        }
+      } else {
+        final repertoire = await getTemporaryDirectory();
+        final fichier = File('${repertoire.path}/mes_recettes.json');
+        await fichier.writeAsString(jsonDesRecettes);
+        await Share.shareXFiles([XFile(fichier.path)], text: 'Voici mon carnet de recettes !');
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("❌ Erreur d'exportation : $e"), backgroundColor: Colors.red));
+    }
+  }
+
+  // =========================================================
+  // --- IMPORT DES RECETTES (AVEC FUSION INTELLIGENTE) ---
+  // =========================================================
+  Future<void> _importerRecettes() async {
+    FilePickerResult? resultat = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['json']);
+
+    if (resultat != null && resultat.files.single.path != null) {
+      try {
+        File fichier = File(resultat.files.single.path!);
+        String contenu = await fichier.readAsString();
+        List decodeRecettes = jsonDecode(contenu);
+
+        // On sécurise les données qui arrivent
+        List<Map<String, dynamic>> nouvellesRecettes = decodeRecettes.map((e) {
+          Map<String, dynamic> plat = Map<String, dynamic>.from(e);
+          if (plat['ingredients'] != null) plat['ingredients'] = (plat['ingredients'] as List).map((i) => i.toString()).toList();
+          if (plat['legumes'] != null) plat['legumes'] = (plat['legumes'] as num).toDouble();
+          if (plat['proteines'] != null) plat['proteines'] = (plat['proteines'] as num).toDouble();
+          if (plat['feculents'] != null) plat['feculents'] = (plat['feculents'] as num).toDouble();
+          return plat;
+        }).toList();
+
+        // On fusionne sans créer de doublons
+        int recettesAjoutees = 0;
+        setState(() {
+          for (var nouvelle in nouvellesRecettes) {
+            // Si la recette n'existe pas déjà (en vérifiant le nom)
+            if (!mesRecettesGlobales.any((r) => r['nom'].toString().toLowerCase() == nouvelle['nom'].toString().toLowerCase())) {
+              mesRecettesGlobales.add(nouvelle);
+              recettesAjoutees++;
+            }
+          }
+        });
+
+        await sauvegarderDonneesLocales();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("📥 $recettesAjoutees nouvelle(s) recette(s) importée(s) !"), backgroundColor: Colors.blue)
+          );
+        }
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("❌ Ce fichier JSON n'est pas un carnet de recettes valide."), backgroundColor: Colors.red));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Carnet de Recettes"), backgroundColor: Colors.white, foregroundColor: Colors.black, elevation: 0),
+      appBar: AppBar(
+        title: const Text("Carnet de Recettes"),
+        elevation: 0,
+        actions: [
+          IconButton(icon: const Icon(Icons.file_download, color: Colors.blue), tooltip: "Importer des recettes", onPressed: _importerRecettes),
+          IconButton(icon: const Icon(Icons.save, color: Colors.green), tooltip: "Sauvegarder / Partager", onPressed: _exporterRecettes)
+        ],
+      ),
       body: Column(
         children: [
           Padding(
@@ -87,7 +180,7 @@ class _EcranBibliothequeState extends State<EcranBibliotheque> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(onPressed: () => _afficherFormulaireCreation(context), icon: const Icon(Icons.add), label: const Text("Créer un plat"), backgroundColor: Colors.green),
+      floatingActionButton: FloatingActionButton.extended(onPressed: () => _afficherFormulaireCreation(context), icon: const Icon(Icons.add), label: const Text("Créer un plat"), backgroundColor: Colors.green, foregroundColor: Colors.white),
     );
   }
 
@@ -99,7 +192,7 @@ class _EcranBibliothequeState extends State<EcranBibliotheque> {
 
     if (resultat == "SUPPRIMER" && platAEditer != null) {
       setState(() { mesRecettesGlobales.remove(platAEditer); });
-      sauvegarderDonneesLocales(); // <-- SAUVEGARDE
+      sauvegarderDonneesLocales();
     } else if (resultat != null && resultat is Map<String, dynamic>) {
       setState(() {
         if (platAEditer != null) {
@@ -109,7 +202,7 @@ class _EcranBibliothequeState extends State<EcranBibliotheque> {
           mesRecettesGlobales.add(resultat);
         }
       });
-      sauvegarderDonneesLocales(); // <-- SAUVEGARDE
+      sauvegarderDonneesLocales();
     }
   }
 }
@@ -202,11 +295,11 @@ class _FormulaireCreationPlatState extends State<FormulaireCreationPlat> {
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler", style: TextStyle(color: Colors.grey))),
               ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
                   onPressed: () {
                     dictionnaireIngredientsGlobal[ingredientNom] = categorieChoisie;
                     setState(() { ingredientsSelectionnes.add(ingredientNom); _ingredientController.clear(); _mettreAJourSuggestions(""); });
-                    sauvegarderDonneesLocales(); // <-- SAUVEGARDE
+                    sauvegarderDonneesLocales();
                     Navigator.pop(context);
                   },
                   child: const Text("Enregistrer")
@@ -234,7 +327,7 @@ class _FormulaireCreationPlatState extends State<FormulaireCreationPlat> {
 
               SizedBox(height: 40, child: ListView.builder(scrollDirection: Axis.horizontal, itemCount: couleursPossibles.length, itemBuilder: (context, index) {
                 final couleur = couleursPossibles[index];
-                return GestureDetector(onTap: () => setState(() => couleurSelectionnee = couleur), child: Container(margin: const EdgeInsets.only(right: 10), width: 40, decoration: BoxDecoration(color: couleur, shape: BoxShape.circle, border: couleurSelectionnee == couleur ? Border.all(color: Colors.black, width: 3) : null)));
+                return GestureDetector(onTap: () => setState(() => couleurSelectionnee = couleur), child: Container(margin: const EdgeInsets.only(right: 10), width: 40, decoration: BoxDecoration(color: couleur, shape: BoxShape.circle, border: couleurSelectionnee == couleur ? Border.all(color: estModeSombreGlobal ? Colors.white : Colors.black, width: 3) : null)));
               })),
               const SizedBox(height: 15),
 
@@ -247,10 +340,20 @@ class _FormulaireCreationPlatState extends State<FormulaireCreationPlat> {
 
               TextField(controller: _ingredientController, decoration: InputDecoration(labelText: "Rechercher ou ajouter un ingrédient...", border: const OutlineInputBorder(), prefixIcon: const Icon(Icons.search), suffixIcon: IconButton(icon: const Icon(Icons.add_circle, color: Colors.green), onPressed: () => _ajouterIngredient(_ingredientController.text))), onChanged: _mettreAJourSuggestions, onSubmitted: _ajouterIngredient),
               const SizedBox(height: 10),
-              if (suggestions.isNotEmpty) Wrap(spacing: 6, runSpacing: -8, children: suggestions.take(12).map((ing) => ActionChip(label: Text(ing, style: const TextStyle(fontSize: 12)), backgroundColor: Colors.grey.shade200, onPressed: () => _ajouterIngredient(ing))).toList()),
+
+              if (suggestions.isNotEmpty) Wrap(
+                  spacing: 6, runSpacing: 8,
+                  children: suggestions.take(12).map((ing) => ActionChip(
+                      label: Text(ing, style: TextStyle(fontSize: 12, color: estModeSombreGlobal ? Colors.white : Colors.black)),
+                      backgroundColor: estModeSombreGlobal ? Colors.grey.shade800 : Colors.grey.shade200,
+                      side: BorderSide.none,
+                      onPressed: () => _ajouterIngredient(ing)
+                  )).toList()
+              ),
+
               const SizedBox(height: 15),
               if (ingredientsSelectionnes.isNotEmpty) const Text("Dans cette recette :", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.green)),
-              Wrap(spacing: 8, children: ingredientsSelectionnes.map((ing) => InputChip(label: Text(ing, style: const TextStyle(color: Colors.white)), backgroundColor: Colors.green, deleteIconColor: Colors.white, onDeleted: () { setState(() { ingredientsSelectionnes.remove(ing); _mettreAJourSuggestions(_ingredientController.text); }); })).toList()),
+              Wrap(spacing: 8, children: ingredientsSelectionnes.map((ing) => InputChip(label: Text(ing, style: const TextStyle(color: Colors.white)), backgroundColor: Colors.green, deleteIconColor: Colors.white, side: BorderSide.none, onDeleted: () { setState(() { ingredientsSelectionnes.remove(ing); _mettreAJourSuggestions(_ingredientController.text); }); })).toList()),
               const SizedBox(height: 10),
 
               SwitchListTile(title: const Text("Recette rapide (< 20 min)"), value: estRapide, onChanged: (val) => setState(() { estRapide = val; if (val) _tempsController.clear(); }), contentPadding: EdgeInsets.zero),
@@ -305,7 +408,7 @@ class _FormulaireCreationPlatState extends State<FormulaireCreationPlat> {
                           };
                           Navigator.pop(context, nouvelleRecette);
                         } : null,
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
                         child: Text(estModeEdition ? "Sauvegarder" : "Ajouter à la bibliothèque", style: const TextStyle(fontSize: 16)),
                       ),
                     ),

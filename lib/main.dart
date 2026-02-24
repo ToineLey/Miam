@@ -1,22 +1,64 @@
 import 'package:flutter/material.dart';
-import 'ecran_swipe.dart';
+import 'donnees_globales.dart';
 import 'ecran_bibliotheque.dart';
 import 'ecran_planificateur.dart';
 import 'ecran_courses.dart';
+import 'ecran_accueil.dart';
 
-void main() {
-  runApp(const MonAppRepas());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await chargerDonneesLocales();
+
+  runApp(const MonApplication());
 }
 
-class MonAppRepas extends StatelessWidget {
-  const MonAppRepas({super.key});
+class MonApplication extends StatelessWidget {
+  const MonApplication({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Organisateur de Repas',
-      theme: ThemeData(primarySwatch: Colors.green),
-      home: const NavigationPrincipale(),
+    // Le ValueListenableBuilder écoute en direct le "themeNotifier"
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeNotifier,
+      builder: (context, currentMode, child) {
+        return MaterialApp(
+          title: 'Appli Repas',
+
+          // --- THÈME CLAIR ---
+          theme: ThemeData(
+            brightness: Brightness.light,
+            primarySwatch: Colors.green,
+            scaffoldBackgroundColor: Colors.grey.shade100,
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              elevation: 0,
+            ),
+          ),
+
+          // --- THÈME SOMBRE ---
+          darkTheme: ThemeData(
+            brightness: Brightness.dark,
+            primarySwatch: Colors.green,
+            scaffoldBackgroundColor: const Color(0xFF121212), // Gris très foncé
+            cardColor: const Color(0xFF1E1E1E), // Cartes légèrement plus claires
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Color(0xFF1E1E1E),
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
+            bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+              backgroundColor: Color(0xFF1E1E1E),
+              selectedItemColor: Colors.greenAccent,
+              unselectedItemColor: Colors.grey,
+            ),
+          ),
+
+          themeMode: currentMode, // C'est ici que la magie opère
+          home: const NavigationPrincipale(),
+          debugShowCheckedModeBanner: false,
+        );
+      },
     );
   }
 }
@@ -29,35 +71,35 @@ class NavigationPrincipale extends StatefulWidget {
 }
 
 class _NavigationPrincipaleState extends State<NavigationPrincipale> {
-  int _indexActuel = 0;
+  int _indexSelectionne = 0;
 
-  // Nos 5 écrans (vides pour l'instant)
   final List<Widget> _ecrans = [
-    const Center(child: Text("1. Accueil (Le Menu)")),
-    const EcranSwipe(),
+    const EcranAccueil(),
+    // const EcranSwipe(),
     const EcranBibliotheque(),
     const EcranPlanificateur(),
     const EcranCourses(),
   ];
 
+  void _changerOnglet(int index) {
+    setState(() {
+      _indexSelectionne = index;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Mon App de Repas')),
-      body: _ecrans[_indexActuel],
+      body: _ecrans[_indexSelectionne],
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _indexActuel,
+        currentIndex: _indexSelectionne,
+        onTap: _changerOnglet,
         type: BottomNavigationBarType.fixed,
-        onTap: (index) {
-          setState(() {
-            _indexActuel = index;
-          });
-        },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Accueil'),
-          BottomNavigationBarItem(icon: Icon(Icons.swipe), label: 'Swipe'),
+          // BottomNavigationBarItem(icon: Icon(Icons.swipe), label: 'Découvrir'),
           BottomNavigationBarItem(icon: Icon(Icons.book), label: 'Recettes'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Planning'),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: 'Planning'),
           BottomNavigationBarItem(icon: Icon(Icons.shopping_cart), label: 'Courses'),
         ],
       ),
