@@ -1,6 +1,6 @@
 {
-    "name": "appli_repas",
-    "short_name": "appli_repas",
+    "name": "Miam",
+    "short_name": "Miam",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

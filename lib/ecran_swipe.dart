@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_card_swiper/flutter_card_swiper.dart';
-import 'donnees_globales.dart'; // Import du fichier de sauvegarde
+import 'donnees_globales.dart';
 
 class EcranSwipe extends StatefulWidget {
   const EcranSwipe({super.key});
@@ -16,11 +16,11 @@ class _EcranSwipeState extends State<EcranSwipe> {
   final CardSwiperController _swiperControllerIngredients = CardSwiperController();
 
   final List<Map<String, dynamic>> baseDecouverteInternet = [
-    {"nom": "Curry de Pois Chiches", "rapide": true, "tempsExact": 20, "categorie": "Plat principal", "couleur": Colors.orange.value, "legumes": 40.0, "proteines": 30.0, "feculents": 30.0, "ingredients": ["Pois chiches", "Lait de coco", "Curry", "Riz"]},
-    {"nom": "Soupe à l'Oignon", "rapide": false, "tempsExact": 45, "categorie": "Entrée", "couleur": Colors.amber.value, "legumes": 80.0, "proteines": 0.0, "feculents": 20.0, "ingredients": ["Oignons", "Bouillon", "Pain", "Emmental"]},
-    {"nom": "Wok de Crevettes", "rapide": true, "tempsExact": 15, "categorie": "Plat principal", "couleur": Colors.pink.value, "legumes": 50.0, "proteines": 30.0, "feculents": 20.0, "ingredients": ["Crevettes", "Poivrons", "Sauce Soja", "Nouilles"]},
-    {"nom": "Gratin Dauphinois", "rapide": false, "tempsExact": 60, "categorie": "Plat principal", "couleur": Colors.yellow.value, "legumes": 0.0, "proteines": 20.0, "feculents": 80.0, "ingredients": ["Pommes de terre", "Crème", "Lait", "Ail"]},
-    {"nom": "Mousse au Chocolat", "rapide": true, "tempsExact": 15, "categorie": "Dessert", "couleur": Colors.brown.value, "legumes": 0.0, "proteines": 30.0, "feculents": 70.0, "ingredients": ["Chocolat", "Oeufs", "Sucre"]},
+    {"nom": "Curry de Pois Chiches", "rapide": true, "tempsExact": 20, "categorie": "Plat principal", "couleur": Colors.orange.value, "legumes": 40, "proteines": 30, "feculents": 30, "ingredients": ["Pois chiches", "Lait de coco", "Curry", "Riz"]},
+    {"nom": "Soupe à l'Oignon", "rapide": false, "tempsExact": 45, "categorie": "Entrée", "couleur": Colors.amber.value, "legumes": 80, "proteines": 0, "feculents": 20, "ingredients": ["Oignons", "Bouillon", "Pain", "Emmental"]},
+    {"nom": "Wok de Crevettes", "rapide": true, "tempsExact": 15, "categorie": "Plat principal", "couleur": Colors.pink.value, "legumes": 50, "proteines": 30, "feculents": 20, "ingredients": ["Crevettes", "Poivrons", "Sauce Soja", "Nouilles"]},
+    {"nom": "Gratin Dauphinois", "rapide": false, "tempsExact": 60, "categorie": "Plat principal", "couleur": Colors.yellow.value, "legumes": 0, "proteines": 20, "feculents": 80, "ingredients": ["Pommes de terre", "Crème", "Lait", "Ail"]},
+    {"nom": "Mousse au Chocolat", "rapide": true, "tempsExact": 15, "categorie": "Dessert", "couleur": Colors.brown.value, "legumes": 0, "proteines": 30, "feculents": 70, "ingredients": ["Chocolat", "Oeufs", "Sucre"]},
   ];
 
   final List<String> ingredientsANoter = [
@@ -40,7 +40,6 @@ class _EcranSwipeState extends State<EcranSwipe> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
       body: SafeArea(
         child: Column(
           children: [
@@ -55,9 +54,15 @@ class _EcranSwipeState extends State<EcranSwipe> {
                 onSelectionChanged: (Set<int> newSelection) {
                   setState(() => modeActuel = newSelection.first);
                 },
-                style: ButtonStyle(backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
-                  return states.contains(WidgetState.selected) ? Colors.green.shade100 : Colors.white;
-                })),
+                style: ButtonStyle(
+                  backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+                    if (states.contains(WidgetState.selected)) return estModeSombreGlobal ? Colors.green.withOpacity(0.3) : Colors.green.shade100;
+                    return estModeSombreGlobal ? Colors.grey.shade900 : Colors.white;
+                  }),
+                  foregroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+                    return estModeSombreGlobal ? Colors.white : Colors.black;
+                  }),
+                ),
               ),
             ),
 
@@ -99,7 +104,7 @@ class _EcranSwipeState extends State<EcranSwipe> {
     }
 
     return CardSwiper(
-      key: ValueKey('recettes_${plats.length}'),
+      key: ValueKey('recettes_${plats.length}_$estModeSombreGlobal'),
       controller: _swiperControllerRecettes,
       cardsCount: plats.length,
       isLoop: false,
@@ -112,7 +117,7 @@ class _EcranSwipeState extends State<EcranSwipe> {
           setState(() {
             mesRecettesGlobales.add(Map<String, dynamic>.from(plat));
           });
-          sauvegarderDonneesLocales(); // <-- SAUVEGARDE
+          sauvegarderDonneesLocales();
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("✅ ${plat['nom']} ajouté à ton carnet !"), backgroundColor: Colors.green, duration: const Duration(seconds: 1)));
         }
         return true;
@@ -127,7 +132,7 @@ class _EcranSwipeState extends State<EcranSwipe> {
   Widget _construireCarteRecette(Map<String, dynamic> plat) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(20),
         boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 5))],
         border: Border.all(color: Color(plat["couleur"]).withOpacity(0.5), width: 2),
@@ -153,13 +158,13 @@ class _EcranSwipeState extends State<EcranSwipe> {
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      Icon(Icons.timer, size: 16, color: Colors.grey.shade600),
+                      const Icon(Icons.timer, size: 16, color: Colors.grey),
                       const SizedBox(width: 5),
-                      Text("${plat['tempsExact']} min", style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+                      Text("${plat['tempsExact']} min", style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
                       const SizedBox(width: 15),
-                      Icon(Icons.category, size: 16, color: Colors.grey.shade600),
+                      const Icon(Icons.category, size: 16, color: Colors.grey),
                       const SizedBox(width: 5),
-                      Text(plat["categorie"], style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+                      Text(plat["categorie"], style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
                     ],
                   ),
                   const Divider(height: 30),
@@ -168,7 +173,14 @@ class _EcranSwipeState extends State<EcranSwipe> {
                   Wrap(
                     spacing: 8, runSpacing: 8,
                     children: (plat["ingredients"] as List).map((ing) {
-                      return Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(10)), child: Text(ing, style: const TextStyle(fontSize: 13)));
+                      return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                              color: estModeSombreGlobal ? Colors.grey.shade800 : Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(10)
+                          ),
+                          child: Text(ing, style: TextStyle(fontSize: 13, color: estModeSombreGlobal ? Colors.white : Colors.black))
+                      );
                     }).toList(),
                   ),
                 ],
@@ -186,7 +198,7 @@ class _EcranSwipeState extends State<EcranSwipe> {
     }
 
     return CardSwiper(
-      key: ValueKey('ingredients_${ingredientsANoter.length}'),
+      key: ValueKey('ingredients_${ingredientsANoter.length}_$estModeSombreGlobal'),
       controller: _swiperControllerIngredients,
       cardsCount: ingredientsANoter.length,
       isLoop: false,
@@ -197,7 +209,7 @@ class _EcranSwipeState extends State<EcranSwipe> {
         final ingredient = ingredientsANoter[previousIndex];
         if (direction == CardSwiperDirection.left) {
           setState(() => ingredientsBannisGlobaux.add(ingredient));
-          sauvegarderDonneesLocales(); // <-- SAUVEGARDE
+          sauvegarderDonneesLocales();
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("🚫 $ingredient banni !"), backgroundColor: Colors.red, duration: const Duration(seconds: 1)));
         } else if (direction == CardSwiperDirection.right) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("❤️ Tu aimes : $ingredient"), backgroundColor: Colors.green, duration: const Duration(seconds: 1)));
@@ -207,7 +219,7 @@ class _EcranSwipeState extends State<EcranSwipe> {
       cardBuilder: (context, index, percentThresholdX, percentThresholdY) {
         if (index >= ingredientsANoter.length) return const SizedBox.shrink();
         return Container(
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 5))]),
+          decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(20), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 5))]),
           child: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,

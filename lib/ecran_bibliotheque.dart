@@ -35,18 +35,15 @@ class _EcranBibliothequeState extends State<EcranBibliotheque> {
       int tempsB = b["rapide"] ? (b["tempsExact"] ?? 15) : (b["tempsExact"] ?? 999);
       switch (triActuel) {
         case "Temps (Court)": return tempsA.compareTo(tempsB);
-        case "+ de Légumes": return (b["legumes"] as double).compareTo(a["legumes"] as double);
-        case "+ de Protéines": return (b["proteines"] as double).compareTo(a["proteines"] as double);
-        case "+ de Féculents": return (b["feculents"] as double).compareTo(a["feculents"] as double);
+        case "+ de Légumes": return (b["legumes"] as num).compareTo(a["legumes"] as num);
+        case "+ de Protéines": return (b["proteines"] as num).compareTo(a["proteines"] as num);
+        case "+ de Féculents": return (b["feculents"] as num).compareTo(a["feculents"] as num);
         case "Nom (A-Z)": default: return a["nom"].toString().compareTo(b["nom"].toString());
       }
     });
     return liste;
   }
 
-  // =========================================================
-  // --- EXPORT DES RECETTES (PC vs MOBILE) ---
-  // =========================================================
   Future<void> _exporterRecettes() async {
     try {
       await sauvegarderDonneesLocales();
@@ -76,9 +73,6 @@ class _EcranBibliothequeState extends State<EcranBibliotheque> {
     }
   }
 
-  // =========================================================
-  // --- IMPORT DES RECETTES (AVEC FUSION INTELLIGENTE) ---
-  // =========================================================
   Future<void> _importerRecettes() async {
     FilePickerResult? resultat = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['json']);
 
@@ -86,26 +80,42 @@ class _EcranBibliothequeState extends State<EcranBibliotheque> {
       try {
         File fichier = File(resultat.files.single.path!);
         String contenu = await fichier.readAsString();
-        List decodeRecettes = jsonDecode(contenu);
+        var decodeRecettes = jsonDecode(contenu);
 
-        // On sécurise les données qui arrivent
+        if (decodeRecettes is! List || (decodeRecettes.isNotEmpty && !(decodeRecettes[0] as Map).containsKey('nom'))) {
+          throw Exception("Ce n'est pas un fichier de recettes !");
+        }
+
         List<Map<String, dynamic>> nouvellesRecettes = decodeRecettes.map((e) {
           Map<String, dynamic> plat = Map<String, dynamic>.from(e);
           if (plat['ingredients'] != null) plat['ingredients'] = (plat['ingredients'] as List).map((i) => i.toString()).toList();
-          if (plat['legumes'] != null) plat['legumes'] = (plat['legumes'] as num).toDouble();
-          if (plat['proteines'] != null) plat['proteines'] = (plat['proteines'] as num).toDouble();
-          if (plat['feculents'] != null) plat['feculents'] = (plat['feculents'] as num).toDouble();
+          if (plat['legumes'] != null) plat['legumes'] = (plat['legumes'] as num).toInt();
+          if (plat['proteines'] != null) plat['proteines'] = (plat['proteines'] as num).toInt();
+          if (plat['feculents'] != null) plat['feculents'] = (plat['feculents'] as num).toInt();
           return plat;
         }).toList();
 
-        // On fusionne sans créer de doublons
         int recettesAjoutees = 0;
+        int ingredientsAjoutes = 0;
+
         setState(() {
           for (var nouvelle in nouvellesRecettes) {
-            // Si la recette n'existe pas déjà (en vérifiant le nom)
+            // 1. Ajouter la recette si elle n'existe pas
             if (!mesRecettesGlobales.any((r) => r['nom'].toString().toLowerCase() == nouvelle['nom'].toString().toLowerCase())) {
               mesRecettesGlobales.add(nouvelle);
               recettesAjoutees++;
+            }
+
+            // 2. NOUVEAU : Ajouter les ingrédients inconnus au dictionnaire global
+            if (nouvelle['ingredients'] != null) {
+              for (String ing in nouvelle['ingredients']) {
+                String ingPropre = ing.trim();
+                // Si l'ingrédient n'est pas déjà dans notre dico, on l'ajoute dans "Autres"
+                if (ingPropre.isNotEmpty && !dictionnaireIngredientsGlobal.containsKey(ingPropre)) {
+                  dictionnaireIngredientsGlobal[ingPropre] = "📦 Autres";
+                  ingredientsAjoutes++;
+                }
+              }
             }
           }
         });
@@ -114,11 +124,18 @@ class _EcranBibliothequeState extends State<EcranBibliotheque> {
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("📥 $recettesAjoutees nouvelle(s) recette(s) importée(s) !"), backgroundColor: Colors.blue)
+              SnackBar(
+                  content: Text("📥 $recettesAjoutees recette(s) et $ingredientsAjoutes ingrédient(s) importés !"),
+                  backgroundColor: Colors.blue
+              )
           );
         }
       } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("❌ Ce fichier JSON n'est pas un carnet de recettes valide."), backgroundColor: Colors.red));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("❌ Erreur : Mauvais fichier (Ce n'est pas un carnet de recettes)."), backgroundColor: Colors.red)
+          );
+        }
       }
     }
   }
@@ -220,7 +237,10 @@ class _FormulaireCreationPlatState extends State<FormulaireCreationPlat> {
   late TextEditingController _ingredientController;
 
   bool estRapide = false;
-  double legumes = 34; double proteines = 33; double feculents = 33;
+
+  // CORRECTION : Les pourcentages sont maintenant des entiers
+  int legumes = 34; int proteines = 33; int feculents = 33;
+
   String categorieSelectionnee = "Plat principal";
   Color couleurSelectionnee = Colors.blue;
 
@@ -240,7 +260,11 @@ class _FormulaireCreationPlatState extends State<FormulaireCreationPlat> {
     _ingredientController = TextEditingController();
 
     if (plat != null) {
-      legumes = plat["legumes"]; proteines = plat["proteines"]; feculents = plat["feculents"];
+      // Conversion des éventuels anciens décimaux en entiers
+      legumes = (plat["legumes"] as num).toInt();
+      proteines = (plat["proteines"] as num).toInt();
+      feculents = (plat["feculents"] as num).toInt();
+
       categorieSelectionnee = plat["categorie"]; couleurSelectionnee = Color(plat["couleur"]);
       ingredientsSelectionnes = List<String>.from(plat["ingredients"]);
     }
@@ -250,7 +274,7 @@ class _FormulaireCreationPlatState extends State<FormulaireCreationPlat> {
   @override
   void dispose() { _nomController.dispose(); _tempsController.dispose(); _ingredientController.dispose(); super.dispose(); }
 
-  double get total => legumes + proteines + feculents;
+  int get total => legumes + proteines + feculents;
 
   void _mettreAJourSuggestions(String texte) {
     setState(() {
@@ -362,7 +386,7 @@ class _FormulaireCreationPlatState extends State<FormulaireCreationPlat> {
 
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                 const Text("Répartition :", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                Text(total == 100 ? "Complet (100%)" : "Reste à allouer : ${(100 - total).toInt()}%", style: TextStyle(fontWeight: FontWeight.bold, color: total == 100 ? Colors.green : Colors.orange)),
+                Text(total == 100 ? "Complet (100%)" : "Reste à allouer : ${100 - total}%", style: TextStyle(fontWeight: FontWeight.bold, color: total == 100 ? Colors.green : Colors.orange)),
               ]),
               const SizedBox(height: 10),
 
@@ -422,7 +446,13 @@ class _FormulaireCreationPlatState extends State<FormulaireCreationPlat> {
     );
   }
 
-  Widget _construireSlider(String label, double valeur, Color couleur, Function(double) onChanged) {
-    return Row(children: [SizedBox(width: 80, child: Text(label)), Expanded(child: Slider(value: valeur, min: 0, max: 100, activeColor: couleur, onChanged: onChanged)), SizedBox(width: 40, child: Text("${valeur.toInt()}%", textAlign: TextAlign.right))]);
+  // CORRECTION : Modification de la signature pour manipuler des `int` au lieu de `double`
+  Widget _construireSlider(String label, int valeur, Color couleur, Function(int) onChanged) {
+    return Row(children: [
+      SizedBox(width: 80, child: Text(label)),
+      // Le Slider de Flutter prend nativement des double, on le convertit donc en int à la sortie
+      Expanded(child: Slider(value: valeur.toDouble(), min: 0, max: 100, activeColor: couleur, onChanged: (val) => onChanged(val.toInt()))),
+      SizedBox(width: 40, child: Text("$valeur%", textAlign: TextAlign.right))
+    ]);
   }
 }

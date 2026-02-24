@@ -70,6 +70,49 @@ class _EcranPlanificateurState extends State<EcranPlanificateur> {
     await sauvegarderDonneesLocales();
   }
 
+  // =========================================================
+  // --- NOUVEAU : VIDER LA SEMAINE ENTIÈRE ---
+  // =========================================================
+  Future<void> _viderSemaine() async {
+    bool? confirmer = await showDialog<bool>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text("Vider la semaine ?"),
+            content: const Text("Es-tu sûr de vouloir effacer tous les plats planifiés cette semaine ?"),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text("Annuler", style: TextStyle(color: Colors.grey))
+              ),
+              ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text("Tout effacer")
+              ),
+            ],
+          );
+        }
+    );
+
+    if (confirmer == true) {
+      setState(() {
+        for (var jour in semaineGlobale) {
+          for (var repas in jour.repasDuJour) {
+            repas.platSelectionne = null; // On retire le plat
+          }
+        }
+      });
+      await sauvegarderDonneesLocales();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("🗑️ Semaine vidée !"), backgroundColor: Colors.orange)
+        );
+      }
+    }
+  }
+
   Future<void> _exporterPlanningNatifs() async {
     try {
       await sauvegarderDonneesLocales();
@@ -107,12 +150,56 @@ class _EcranPlanificateurState extends State<EcranPlanificateur> {
       try {
         File fichier = File(resultat.files.single.path!);
         String contenu = await fichier.readAsString();
-        List decodePlanning = jsonDecode(contenu);
-        setState(() => semaineGlobale = decodePlanning.map((e) => Jour.fromJson(Map<String, dynamic>.from(e))).toList());
+        var decodePlanning = jsonDecode(contenu);
+
+        if (decodePlanning is! List || (decodePlanning.isNotEmpty && !(decodePlanning[0] as Map).containsKey('nomJour'))) {
+          throw Exception("Ce n'est pas un fichier de planning !");
+        }
+
+        int recettesAjoutees = 0;
+
+        setState(() {
+          semaineGlobale = decodePlanning.map((e) => Jour.fromJson(Map<String, dynamic>.from(e))).toList();
+
+          for (var jour in semaineGlobale) {
+            for (var repas in jour.repasDuJour) {
+              if (repas.platSelectionne != null) {
+                var plat = repas.platSelectionne!;
+
+                if (!mesRecettesGlobales.any((r) => r['nom'].toString().toLowerCase() == plat['nom'].toString().toLowerCase())) {
+                  mesRecettesGlobales.add(plat);
+                  recettesAjoutees++;
+                }
+
+                if (plat['ingredients'] != null) {
+                  for (String ing in plat['ingredients']) {
+                    String ingPropre = ing.trim();
+                    if (ingPropre.isNotEmpty && !dictionnaireIngredientsGlobal.containsKey(ingPropre)) {
+                      dictionnaireIngredientsGlobal[ingPropre] = "📦 Autres";
+                    }
+                  }
+                }
+              }
+            }
+          }
+        });
+
         await sauvegarderDonneesLocales();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("📥 Menu importé avec succès !"), backgroundColor: Colors.blue));
+
+        if (mounted) {
+          String message = "📥 Menu importé avec succès !";
+          if (recettesAjoutees > 0) message += " ($recettesAjoutees recette(s) ajoutée(s) à ta base)";
+
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(message), backgroundColor: Colors.blue)
+          );
+        }
       } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("❌ Ce fichier JSON n'est pas valide."), backgroundColor: Colors.red));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("❌ Erreur : Mauvais fichier (Ce n'est pas un planning)."), backgroundColor: Colors.red)
+          );
+        }
       }
     }
   }
@@ -168,9 +255,9 @@ class _EcranPlanificateurState extends State<EcranPlanificateur> {
       Wrap(
           spacing: 6, runSpacing: 8,
           children: listeTags.map((tag) => InputChip(
-              label: Text(tag, style: TextStyle(color: estModeSombreGlobal ? Colors.white : Colors.black)), // CORRECTION COULEUR
+              label: Text(tag, style: TextStyle(color: estModeSombreGlobal ? Colors.white : Colors.black)),
               onDeleted: () => onRemove(tag),
-              backgroundColor: estModeSombreGlobal ? Colors.grey.shade800 : Colors.grey.shade200 // CORRECTION COULEUR
+              backgroundColor: estModeSombreGlobal ? Colors.grey.shade800 : Colors.grey.shade200
           )).toList()
       ),
     ]);
@@ -209,10 +296,11 @@ class _EcranPlanificateurState extends State<EcranPlanificateur> {
     final joursVisibles = semaineGlobale.where((jour) => jour.estAffiche && jour.repasDuJour.isNotEmpty).toList();
 
     return Scaffold(
-      // CORRECTION : On retire les couleurs "en dur" pour que l'AppBar devienne foncée automatiquement
       appBar: AppBar(
         title: const Text("Planificateur"),
         actions: [
+          // NOUVEAU BOUTON : Vider la semaine
+          IconButton(icon: const Icon(Icons.delete_sweep, color: Colors.red), tooltip: "Vider la semaine", onPressed: _viderSemaine),
           IconButton(icon: const Icon(Icons.file_download, color: Colors.blue), tooltip: "Importer un planning", onPressed: _importerPlanningNatifs),
           IconButton(icon: const Icon(Icons.save, color: Colors.green), tooltip: "Sauvegarder", onPressed: _exporterPlanningNatifs)
         ],
@@ -261,7 +349,6 @@ class _EcranPlanificateurState extends State<EcranPlanificateur> {
                 children: [
                   Container(
                       width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 15),
-                      // CORRECTION COULEUR BANDEAU DU JOUR
                       decoration: BoxDecoration(
                           color: estModeSombreGlobal ? Colors.grey.shade800 : Colors.grey.shade200,
                           borderRadius: const BorderRadius.vertical(top: Radius.circular(10))
@@ -290,7 +377,6 @@ class _EcranPlanificateurState extends State<EcranPlanificateur> {
             SizedBox(width: 80, child: Text(repas.type, style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 13))),
             Expanded(child: estVide ? Container(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                // CORRECTION COULEUR CASE VIDE
                 decoration: BoxDecoration(
                     border: Border.all(
                         color: estModeSombreGlobal ? Colors.grey.shade700 : Colors.grey.shade300,

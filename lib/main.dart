@@ -22,7 +22,7 @@ class MonApplication extends StatelessWidget {
       valueListenable: themeNotifier,
       builder: (context, currentMode, child) {
         return MaterialApp(
-          title: 'Appli Repas',
+          title: 'Miam',
 
           // --- THÈME CLAIR ---
           theme: ThemeData(

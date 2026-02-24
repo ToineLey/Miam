@@ -30,7 +30,7 @@ class _EcranAccueilState extends State<EcranAccueil> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Bonjour ! 👋", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("Miam 🍗", style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           // --- LE BOUTON MODE SOMBRE / CLAIR ---
           IconButton(
