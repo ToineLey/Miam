@@ -1,4 +1,4 @@
-# appli_repas
+# appli repas
 
 appli pour faire des menus et repas
 
