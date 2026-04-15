@@ -7,34 +7,68 @@ import 'package:shared_preferences/shared_preferences.dart';
 // --- CLASSES POUR LE PLANNING ---
 class Repas {
   String type;
-  Map<String, dynamic>? platSelectionne;
   int convives;
 
-  Repas({required this.type, this.platSelectionne, required this.convives});
+  // Le plat principal (Classique)
+  Map<String, dynamic>? platSelectionne;
+
+  // Les nouveautés pour le repas complet / décomposé
+  bool estDecompose;
+  String? proteine;
+  String? legume;
+  String? feculent;
+
+  Map<String, dynamic>? entree;
+  Map<String, dynamic>? dessert;
+
+  Repas({
+    required this.type,
+    required this.convives,
+    this.platSelectionne,
+    this.estDecompose = false,
+    this.proteine,
+    this.legume,
+    this.feculent,
+    this.entree,
+    this.dessert,
+  });
 
   Map<String, dynamic> toJson() => {
     'type': type,
-    'platSelectionne': platSelectionne,
     'convives': convives,
+    'platSelectionne': platSelectionne,
+    'estDecompose': estDecompose,
+    'proteine': proteine,
+    'legume': legume,
+    'feculent': feculent,
+    'entree': entree,
+    'dessert': dessert,
   };
 
   factory Repas.fromJson(Map<String, dynamic> json) {
-    Map<String, dynamic>? platParse;
-    try {
-      if (json['platSelectionne'] != null) {
-        platParse = Map<String, dynamic>.from(json['platSelectionne']);
-        if (platParse['ingredients'] != null) {
-          platParse['ingredients'] = (platParse['ingredients'] as List).map((e) => e.toString()).toList();
+    Map<String, dynamic>? parsePlat(dynamic data) {
+      if (data == null) return null;
+      try {
+        var plat = Map<String, dynamic>.from(data);
+        if (plat['ingredients'] != null) {
+          plat['ingredients'] = (plat['ingredients'] as List).map((e) => e.toString()).toList();
         }
+        return plat;
+      } catch (e) {
+        return null;
       }
-    } catch (e) {
-      debugPrint("Erreur lecture plat : $e");
     }
 
     return Repas(
       type: json['type']?.toString() ?? "Midi",
-      platSelectionne: platParse,
       convives: int.tryParse(json['convives']?.toString() ?? '2') ?? 2,
+      platSelectionne: parsePlat(json['platSelectionne']),
+      estDecompose: json['estDecompose'] ?? false,
+      proteine: json['proteine']?.toString(),
+      legume: json['legume']?.toString(),
+      feculent: json['feculent']?.toString(),
+      entree: parsePlat(json['entree']),
+      dessert: parsePlat(json['dessert']),
     );
   }
 }
@@ -78,10 +112,10 @@ class Jour {
   }
 }
 
-// --- 1. NOS VARIABLES GLOBALES ---
+// --- VARIABLES GLOBALES ---
 List<Map<String, dynamic>> mesRecettesGlobales = [
-  {"nom": "Poulet rôti & Légumes", "rapide": false, "tempsExact": 45, "categorie": "Plat principal", "couleur": Colors.orange.value, "legumes": 50.0, "proteines": 50.0, "feculents": 0.0, "ingredients": ["Poulet", "Carottes", "Oignons"]},
-  {"nom": "Pâtes au Pesto", "rapide": true, "tempsExact": 15, "categorie": "Plat principal", "couleur": Colors.green.value, "legumes": 10.0, "proteines": 10.0, "feculents": 80.0, "ingredients": ["Pâtes", "Pesto", "Parmesan"]},
+  {"nom": "Poulet rôti & Légumes", "rapide": false, "tempsExact": 45, "categorie": "Plat principal", "couleur": Colors.orange.value, "legumes": 50, "proteines": 50, "feculents": 0, "ingredients": ["Poulet", "Carottes", "Oignons"]},
+  {"nom": "Pâtes au Pesto", "rapide": true, "tempsExact": 15, "categorie": "Plat principal", "couleur": Colors.green.value, "legumes": 10, "proteines": 10, "feculents": 80, "ingredients": ["Pâtes", "Pesto", "Parmesan"]},
 ];
 
 final List<String> rayonsSupermarche = [
@@ -100,12 +134,10 @@ int convivesFoyerGlobal = 2;
 List<String> exclusionsSemaineGlobales = [];
 List<String> requisSemaineGlobaux = [];
 
-// --- NOUVEAU : GESTION DU MODE SOMBRE ---
 bool estModeSombreGlobal = false;
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
 
-
-// --- 2. GESTION DU FICHIER PHYSIQUE ET CACHE ---
+// --- GESTION DU FICHIER ---
 Future<File> _obtenirFichierSauvegarde() async {
   final repertoire = await getApplicationDocumentsDirectory();
   return File('${repertoire.path}/mes_donnees_repas.json');
@@ -113,12 +145,10 @@ Future<File> _obtenirFichierSauvegarde() async {
 
 Future<void> chargerDonneesLocales() async {
   try {
-    // 1. Charger les petits réglages depuis SharedPreferences (idéal pour le thème)
     final prefs = await SharedPreferences.getInstance();
     estModeSombreGlobal = prefs.getBool('modeSombre') ?? false;
     themeNotifier.value = estModeSombreGlobal ? ThemeMode.dark : ThemeMode.light;
 
-    // 2. Charger les grosses données depuis le fichier JSON dur
     final fichier = await _obtenirFichierSauvegarde();
     if (!await fichier.exists()) return;
 
@@ -132,9 +162,9 @@ Future<void> chargerDonneesLocales() async {
       mesRecettesGlobales = (donnees['recettes'] as List).map((e) {
         Map<String, dynamic> plat = Map<String, dynamic>.from(e);
         if (plat['ingredients'] != null) plat['ingredients'] = (plat['ingredients'] as List).map((i) => i.toString()).toList();
-        if (plat['legumes'] != null) plat['legumes'] = (plat['legumes'] as num).toDouble();
-        if (plat['proteines'] != null) plat['proteines'] = (plat['proteines'] as num).toDouble();
-        if (plat['feculents'] != null) plat['feculents'] = (plat['feculents'] as num).toDouble();
+        if (plat['legumes'] != null) plat['legumes'] = (plat['legumes'] as num).toInt();
+        if (plat['proteines'] != null) plat['proteines'] = (plat['proteines'] as num).toInt();
+        if (plat['feculents'] != null) plat['feculents'] = (plat['feculents'] as num).toInt();
         return plat;
       }).toList();
     }
@@ -156,11 +186,9 @@ Future<void> chargerDonneesLocales() async {
 
 Future<void> sauvegarderDonneesLocales() async {
   try {
-    // 1. Sauvegarder le thème
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('modeSombre', estModeSombreGlobal);
 
-    // 2. Sauvegarder les données
     final fichier = await _obtenirFichierSauvegarde();
     Map<String, dynamic> toutesLesDonnees = {
       'jourDebut': jourDebutGlobal,
